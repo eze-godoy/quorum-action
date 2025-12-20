@@ -166,7 +166,7 @@ export function getRepoContext(): RepoContext {
 
   if (pullNumber === undefined) {
     throw new Error(
-      'This action must be run in a pull request context. ' +
+      `This action must be run in a pull request context (current event: ${github.context.eventName}). ` +
         'Ensure the workflow is triggered by pull_request or pull_request_target events.'
     );
   }
@@ -210,10 +210,10 @@ export async function fetchPullRequestFiles(
   const files: PullRequestFile[] = [];
   let page = 1;
   const perPage = 100;
+  const maxPages = 50; // Safety limit: 5000 files max
 
   // Paginate through all files
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  while (true) {
+  while (page <= maxPages) {
     const response = await withRetry(async () => {
       return client.rest.pulls.listFiles({
         owner: context.owner,
