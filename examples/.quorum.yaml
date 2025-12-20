@@ -1,0 +1,60 @@
+# yaml-language-server: $schema=../schemas/quorum.schema.json
+
+# Quorum AI Code Review Configuration
+# This file configures how Quorum reviews your pull requests
+
+version: 1
+
+review:
+  # Review depth: quick | standard | deep | security
+  depth: standard
+
+  # Areas to focus on during review
+  focus:
+    - security
+    - performance
+    - best-practices
+
+  # Custom instructions for the AI reviewer
+  instructions: |
+    This is a TypeScript project using strict type checking.
+    Pay attention to proper error handling and type safety.
+    Flag any use of 'any' type or type assertions without justification.
+
+# Files to ignore during review (glob patterns)
+ignore:
+  - '**/*.test.ts'
+  - '**/*.spec.ts'
+  - '**/fixtures/**'
+  - '**/mocks/**'
+
+# Path-specific overrides
+paths:
+  # Apply security-focused review to authentication code
+  - pattern: 'src/auth/**'
+    depth: security
+    instructions: |
+      This is authentication code. Check for:
+      - Proper password hashing
+      - Secure token generation
+      - Rate limiting
+      - Input validation
+
+  # Skip generated files
+  - pattern: 'src/generated/**'
+    ignore: true
+
+  # Quick review for documentation
+  - pattern: 'docs/**'
+    depth: quick
+
+# Model configuration overrides (optional)
+model:
+  # Use a specific model (overrides action input)
+  # id: 'anthropic.claude-3-haiku-20240307-v1:0'
+
+  # Limit response length
+  maxTokens: 4096
+
+  # Lower temperature for more consistent reviews
+  temperature: 0.3

@@ -1,0 +1,56 @@
+name: 'Quorum - AI Code Review'
+description: 'AI-powered code review using AWS Bedrock with multi-model consensus'
+author: 'Ezequiel Godoy'
+
+branding:
+  icon: 'check-circle'
+  color: 'purple'
+
+inputs:
+  aws-role-arn:
+    description: 'AWS IAM Role ARN for OIDC authentication to Bedrock'
+    required: true
+
+  aws-region:
+    description: 'AWS region where Bedrock is available'
+    required: false
+    default: 'us-east-1'
+
+  model:
+    description: 'Bedrock model ID to use for code review'
+    required: false
+    default: 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+
+  config-path:
+    description: 'Path to .quorum.yaml configuration file'
+    required: false
+    default: '.quorum.yaml'
+
+  github-token:
+    description: 'GitHub token for API access (defaults to GITHUB_TOKEN)'
+    required: false
+    default: ${{ github.token }}
+
+  review-depth:
+    description: 'Review depth profile: quick, standard, deep, or security'
+    required: false
+    default: 'standard'
+
+  fail-on-errors:
+    description: 'Fail the action if critical issues are found'
+    required: false
+    default: 'false'
+
+outputs:
+  review-summary:
+    description: 'Summary of the code review results'
+
+  issues-found:
+    description: 'Number of issues found during review'
+
+  cost-usd:
+    description: 'Estimated cost of the review in USD'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
