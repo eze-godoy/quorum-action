@@ -1,0 +1,103 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/eze-godoy/quorum-action/schemas/quorum.schema.json",
+  "title": "Quorum Configuration",
+  "description": "Configuration schema for Quorum AI Code Review",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Configuration schema version"
+    },
+    "review": {
+      "type": "object",
+      "description": "Review behavior configuration",
+      "properties": {
+        "depth": {
+          "type": "string",
+          "enum": ["quick", "standard", "deep", "security"],
+          "default": "standard",
+          "description": "Review depth profile. 'quick' for fast feedback, 'standard' for balanced review, 'deep' for thorough analysis, 'security' for security-focused review"
+        },
+        "focus": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Areas to focus on during review (e.g., 'security', 'performance', 'testing')"
+        },
+        "instructions": {
+          "type": "string",
+          "description": "Custom instructions for the AI reviewer"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ignore": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Glob patterns for files to ignore during review"
+    },
+    "paths": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "Glob pattern to match files"
+          },
+          "instructions": {
+            "type": "string",
+            "description": "Additional review instructions for matched files"
+          },
+          "ignore": {
+            "type": "boolean",
+            "default": false,
+            "description": "Skip review for matched files"
+          },
+          "depth": {
+            "type": "string",
+            "enum": ["quick", "standard", "deep", "security"],
+            "description": "Override review depth for matched files"
+          }
+        },
+        "required": ["pattern"],
+        "additionalProperties": false
+      },
+      "default": [],
+      "description": "Path-specific configuration overrides"
+    },
+    "model": {
+      "type": "object",
+      "description": "Model configuration overrides",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Bedrock model ID override"
+        },
+        "maxTokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000,
+          "default": 4096,
+          "description": "Maximum tokens for model response"
+        },
+        "temperature": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.3,
+          "description": "Model temperature for response generation (0 = deterministic, 1 = creative)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

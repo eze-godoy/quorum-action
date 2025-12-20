@@ -1,0 +1,75 @@
+{
+  "name": "quorum-action",
+  "version": "0.1.0",
+  "description": "AI-powered code review using AWS Bedrock with multi-model consensus",
+  "type": "module",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@9.15.1",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "build:watch": "node scripts/build.js --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/ tests/",
+    "lint:fix": "eslint src/ tests/ --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run format:check",
+    "prepare": "husky && pnpm run build"
+  },
+  "keywords": [
+    "github-actions",
+    "code-review",
+    "ai",
+    "aws-bedrock",
+    "claude",
+    "llm"
+  ],
+  "author": "Ezequiel Godoy",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eze-godoy/quorum-action.git"
+  },
+  "bugs": {
+    "url": "https://github.com/eze-godoy/quorum-action/issues"
+  },
+  "homepage": "https://github.com/eze-godoy/quorum-action#readme",
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/github": "^6.0.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.712.0",
+    "@aws-sdk/credential-providers": "^3.712.0",
+    "yaml": "^2.6.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@vitest/coverage-v8": "^2.1.8",
+    "esbuild": "^0.24.2",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^10.0.1",
+    "eslint-plugin-import-x": "^4.6.1",
+    "globals": "^15.14.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.3.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.2",
+    "vitest": "^2.1.8"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,yml,yaml}": [
+      "prettier --write"
+    ]
+  }
+}
