@@ -41,6 +41,11 @@ inputs:
     required: false
     default: 'false'
 
+  dry-run:
+    description: 'Run without posting comments (logs instead)'
+    required: false
+    default: 'false'
+
 outputs:
   review-summary:
     description: 'Summary of the code review results'
