@@ -14,6 +14,8 @@ export interface RetryConfig {
   baseDelayMs: number;
   /** Maximum delay in milliseconds (cap for exponential growth) */
   maxDelayMs: number;
+  /** Add random jitter (0-25% of delay) to prevent thundering herd */
+  jitter?: boolean;
 }
 
 /**
@@ -39,16 +41,26 @@ export function sleep(ms: number): Promise<void> {
  * @param attempt - Current attempt number (0-indexed)
  * @param baseDelayMs - Base delay in milliseconds
  * @param maxDelayMs - Maximum delay cap in milliseconds
+ * @param jitter - Add random jitter (0-25% of delay) to prevent thundering herd
  * @returns Delay in milliseconds
  */
 export function calculateBackoffDelay(
   attempt: number,
   baseDelayMs: number,
-  maxDelayMs: number
+  maxDelayMs: number,
+  jitter = false
 ): number {
   // Exponential: baseDelay * 2^attempt
   const exponentialDelay = baseDelayMs * Math.pow(2, attempt);
-  return Math.min(exponentialDelay, maxDelayMs);
+  const cappedDelay = Math.min(exponentialDelay, maxDelayMs);
+
+  if (jitter) {
+    // Add random jitter: 0-25% of delay
+    const jitterAmount = cappedDelay * Math.random() * 0.25;
+    return Math.floor(cappedDelay + jitterAmount);
+  }
+
+  return cappedDelay;
 }
 
 /**
@@ -188,7 +200,7 @@ export async function withRetry<T>(
   config?: Partial<RetryConfig>,
   shouldRetry?: (error: unknown) => boolean
 ): Promise<T> {
-  const { maxRetries, baseDelayMs, maxDelayMs } = {
+  const { maxRetries, baseDelayMs, maxDelayMs, jitter } = {
     ...DEFAULT_RETRY_CONFIG,
     ...config,
   };
@@ -209,7 +221,12 @@ export async function withRetry<T>(
 
       // Calculate delay (use retry-after header if available)
       const retryAfterMs = extractRetryAfter(error);
-      const backoffMs = calculateBackoffDelay(attempt, baseDelayMs, maxDelayMs);
+      const backoffMs = calculateBackoffDelay(
+        attempt,
+        baseDelayMs,
+        maxDelayMs,
+        jitter ?? false
+      );
       const delayMs =
         retryAfterMs !== undefined
           ? Math.max(retryAfterMs, backoffMs)
