@@ -47,6 +47,10 @@ describe('QuorumConfigSchema', () => {
         maxTokens: 2048,
         temperature: 0.5,
       },
+      pricing: {
+        inputPer1M: 0.25,
+        outputPer1M: 1.25,
+      },
     };
 
     const result = QuorumConfigSchema.safeParse(config);
@@ -54,7 +58,48 @@ describe('QuorumConfigSchema', () => {
     if (result.success) {
       expect(result.data.review.depth).toBe('deep');
       expect(result.data.paths).toHaveLength(2);
+      expect(result.data.pricing.inputPer1M).toBe(0.25);
+      expect(result.data.pricing.outputPer1M).toBe(1.25);
     }
+  });
+
+  it('uses default pricing when not specified', () => {
+    const config = {
+      version: 1,
+    };
+
+    const result = QuorumConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.pricing.inputPer1M).toBe(3.0);
+      expect(result.data.pricing.outputPer1M).toBe(15.0);
+    }
+  });
+
+  it('rejects negative pricing', () => {
+    const config = {
+      version: 1,
+      pricing: {
+        inputPer1M: -1,
+        outputPer1M: 15.0,
+      },
+    };
+
+    const result = QuorumConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects zero pricing', () => {
+    const config = {
+      version: 1,
+      pricing: {
+        inputPer1M: 0,
+        outputPer1M: 15.0,
+      },
+    };
+
+    const result = QuorumConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
   });
 
   it('rejects invalid review depth', () => {
@@ -143,5 +188,35 @@ review:
     const config = await getConfig(path.join(testDir, '.quorum.yaml'));
 
     expect(config).toEqual(DEFAULT_CONFIG);
+  });
+
+  it('loads custom pricing from config', async () => {
+    const yamlContent = `
+version: 1
+pricing:
+  inputPer1M: 0.99
+  outputPer1M: 0.99
+`;
+    await fs.writeFile(path.join(testDir, '.quorum.yaml'), yamlContent);
+
+    const config = await getConfig(path.join(testDir, '.quorum.yaml'));
+
+    expect(config.pricing.inputPer1M).toBe(0.99);
+    expect(config.pricing.outputPer1M).toBe(0.99);
+  });
+
+  it('uses default pricing when not specified in config', async () => {
+    const yamlContent = `
+version: 1
+review:
+  depth: quick
+`;
+    await fs.writeFile(path.join(testDir, '.quorum.yaml'), yamlContent);
+
+    const config = await getConfig(path.join(testDir, '.quorum.yaml'));
+
+    // Should use defaults: Claude 3.5 Sonnet pricing
+    expect(config.pricing.inputPer1M).toBe(3.0);
+    expect(config.pricing.outputPer1M).toBe(15.0);
   });
 });

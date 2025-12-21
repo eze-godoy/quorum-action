@@ -37,6 +37,26 @@ export const PathOverrideSchema = z.object({
 export type PathOverride = z.infer<typeof PathOverrideSchema>;
 
 /**
+ * Model pricing configuration (per 1M tokens in USD)
+ * Defaults to Claude 3.5 Sonnet pricing
+ */
+export const PricingSchema = z.object({
+  inputPer1M: z
+    .number()
+    .positive()
+    .optional()
+    .default(3.0)
+    .describe('Cost per 1M input tokens in USD'),
+  outputPer1M: z
+    .number()
+    .positive()
+    .optional()
+    .default(15.0)
+    .describe('Cost per 1M output tokens in USD'),
+});
+export type Pricing = z.infer<typeof PricingSchema>;
+
+/**
  * Main Quorum configuration schema
  */
 export const QuorumConfigSchema = z.object({
@@ -96,6 +116,10 @@ export const QuorumConfigSchema = z.object({
     })
     .optional()
     .default({}),
+
+  pricing: PricingSchema.optional()
+    .default({})
+    .describe('Model pricing configuration for cost tracking'),
 });
 
 export type QuorumConfig = z.infer<typeof QuorumConfigSchema>;
@@ -127,6 +151,10 @@ export const DEFAULT_CONFIG: QuorumConfig = {
     id: undefined,
     maxTokens: 4096,
     temperature: 0.3,
+  },
+  pricing: {
+    inputPer1M: 3.0, // Claude 3.5 Sonnet default
+    outputPer1M: 15.0,
   },
 };
 
@@ -161,6 +189,7 @@ export async function getConfig(configPath: string): Promise<QuorumConfig> {
       ignore: [...DEFAULT_CONFIG.ignore, ...result.data.ignore],
       paths: result.data.paths,
       model: { ...DEFAULT_CONFIG.model, ...result.data.model },
+      pricing: { ...DEFAULT_CONFIG.pricing, ...result.data.pricing },
     };
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {

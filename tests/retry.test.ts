@@ -70,6 +70,42 @@ describe('calculateBackoffDelay', () => {
     expect(calculateBackoffDelay(3, 500, 4000)).toBe(4000);
     expect(calculateBackoffDelay(4, 500, 4000)).toBe(4000);
   });
+
+  it('returns exact delay when jitter is false', () => {
+    expect(calculateBackoffDelay(0, 1000, 8000, false)).toBe(1000);
+    expect(calculateBackoffDelay(1, 1000, 8000, false)).toBe(2000);
+  });
+
+  it('adds jitter (0-25%) when jitter is true', () => {
+    // Run multiple times to verify jitter adds variability
+    const baseDelay = 1000;
+    const results = new Set<number>();
+
+    for (let i = 0; i < 100; i++) {
+      const delay = calculateBackoffDelay(0, baseDelay, 8000, true);
+      results.add(delay);
+
+      // Delay should be between base and base + 25%
+      expect(delay).toBeGreaterThanOrEqual(baseDelay);
+      expect(delay).toBeLessThanOrEqual(baseDelay * 1.25);
+    }
+
+    // With 100 iterations, we should have some variation
+    expect(results.size).toBeGreaterThan(1);
+  });
+
+  it('applies jitter to capped delays', () => {
+    // When delay is capped, jitter should still be applied to the capped value
+    const maxDelay = 8000;
+
+    for (let i = 0; i < 10; i++) {
+      const delay = calculateBackoffDelay(10, 1000, maxDelay, true);
+
+      // Delay should be between max and max + 25%
+      expect(delay).toBeGreaterThanOrEqual(maxDelay);
+      expect(delay).toBeLessThanOrEqual(maxDelay * 1.25);
+    }
+  });
 });
 
 describe('isRetryableError', () => {
@@ -329,5 +365,28 @@ describe('withRetry', () => {
 
     const result = await promise;
     expect(result).toBe('success');
+  });
+
+  it('applies jitter to retry delays when enabled', async () => {
+    const error = Object.assign(new Error('Server error'), { status: 500 });
+    const fn = vi
+      .fn()
+      .mockRejectedValueOnce(error)
+      .mockResolvedValue('success');
+
+    const promise = withRetry(fn, {
+      maxRetries: 3,
+      baseDelayMs: 1000,
+      maxDelayMs: 8000,
+      jitter: true,
+    });
+
+    // With jitter, delay should be between 1000 and 1250ms
+    // Advance by max jitter time to ensure retry happens
+    await vi.advanceTimersByTimeAsync(1250);
+
+    const result = await promise;
+    expect(result).toBe('success');
+    expect(fn).toHaveBeenCalledTimes(2);
   });
 });
