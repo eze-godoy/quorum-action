@@ -1,15 +1,19 @@
 import * as core from '@actions/core';
 import { minimatch } from 'minimatch';
 
-import { getConfig } from './config.js';
+import { calculateCost, createBedrockClient, invokeModel } from './bedrock.js';
+import { getConfig, type ReviewDepth } from './config.js';
 import { parsePatch } from './diff-parser.js';
 import {
   createGitHubClient,
   fetchPullRequestFiles,
   getRepoContext,
+  postReview,
   type ParsedPullRequestFile,
   type PullRequestFile,
 } from './github.js';
+import { buildReviewPrompt } from './prompts.js';
+import { parseModelResponse, toCodeReview } from './review-parser.js';
 
 /**
  * Filters files based on ignore patterns from configuration
@@ -43,6 +47,18 @@ function parseFilesWithHunks(
   }));
 }
 
+/**
+ * Validates and normalizes review depth input
+ */
+function normalizeReviewDepth(input: string): ReviewDepth {
+  const validDepths: ReviewDepth[] = ['quick', 'standard', 'deep', 'security'];
+  if (validDepths.includes(input as ReviewDepth)) {
+    return input as ReviewDepth;
+  }
+  core.warning(`Invalid review depth "${input}", using "standard"`);
+  return 'standard';
+}
+
 async function run(): Promise<void> {
   try {
     core.info('Starting Quorum AI Code Review');
@@ -50,24 +66,36 @@ async function run(): Promise<void> {
     // Get action inputs
     const awsRoleArn = core.getInput('aws-role-arn', { required: true });
     const awsRegion = core.getInput('aws-region') || 'us-east-1';
-    const model =
-      core.getInput('model') || 'anthropic.claude-3-5-sonnet-20241022-v2:0';
+    const modelInput = core.getInput('model');
     const configPath = core.getInput('config-path') || '.quorum.yaml';
-    const reviewDepth = core.getInput('review-depth') || 'standard';
+    const reviewDepthInput = core.getInput('review-depth') || 'standard';
     const failOnErrors = core.getInput('fail-on-errors') === 'true';
     const dryRun = core.getInput('dry-run') === 'true';
     const githubToken = core.getInput('github-token', { required: true });
 
     core.debug(`AWS Role ARN: ${awsRoleArn}`);
     core.debug(`AWS Region: ${awsRegion}`);
-    core.debug(`Model: ${model}`);
     core.debug(`Config Path: ${configPath}`);
-    core.debug(`Review Depth: ${reviewDepth}`);
+    core.debug(`Review Depth: ${reviewDepthInput}`);
     core.debug(`Fail on Errors: ${String(failOnErrors)}`);
     core.debug(`Dry Run: ${String(dryRun)}`);
 
     // Load configuration
     const config = await getConfig(configPath);
+
+    // Apply input overrides to config
+    const reviewDepth = normalizeReviewDepth(reviewDepthInput);
+    if (reviewDepthInput !== 'standard') {
+      config.review.depth = reviewDepth;
+    }
+
+    // Model ID: input > config > default
+    const model =
+      (modelInput !== '' ? modelInput : undefined) ??
+      config.model.id ??
+      'anthropic.claude-3-5-sonnet-20241022-v2:0';
+
+    core.debug(`Model: ${model}`);
     core.debug(`Loaded config: ${JSON.stringify(config)}`);
 
     // FORGE-53: GitHub Integration
@@ -103,28 +131,97 @@ async function run(): Promise<void> {
       );
     }
 
-    // TODO FORGE-54: Authenticate to AWS Bedrock via OIDC
-    // const bedrockClient = await createBedrockClient({ roleArn: awsRoleArn, region: awsRegion });
+    // FORGE-55: Build review prompt
+    core.info('Building review prompt...');
+    const builtPrompt = buildReviewPrompt({ config, files: parsedFiles });
+    core.debug(`Prompt version: ${builtPrompt.promptVersion}`);
 
-    // TODO FORGE-54: Send code for review to Bedrock model
-    // const reviewResult = await invokeBedrockReview(bedrockClient, parsedFiles, {
-    //   model,
-    //   depth: reviewDepth,
-    //   config,
-    // });
+    // FORGE-54: Create Bedrock client and invoke model
+    core.info('Initializing AWS Bedrock client...');
+    const bedrockClient = createBedrockClient({
+      region: awsRegion,
+      roleArn: awsRoleArn,
+    });
 
-    // TODO FORGE-55: Parse and post review comments
-    // if (reviewResult.comments.length > 0) {
-    //   const result = await postReview(client, context, reviewResult, { dryRun });
-    //   core.info(`Posted review with ${result.commentsPosted} comments`);
-    //   core.setOutput('review-summary', reviewResult.summary);
-    //   core.setOutput('issues-found', String(reviewResult.comments.length));
-    // }
+    core.info(`Invoking model: ${model}...`);
+    const modelResult = await invokeModel(bedrockClient, {
+      modelId: model,
+      prompt: `${builtPrompt.systemPrompt}\n\n${builtPrompt.userPrompt}`,
+      maxTokens: config.model.maxTokens,
+      temperature: config.model.temperature,
+    });
 
-    // Set outputs (placeholder until FORGE-54/55)
-    core.setOutput('review-summary', 'Review completed successfully');
-    core.setOutput('issues-found', '0');
-    core.setOutput('cost-usd', '0.00');
+    core.info(
+      `Model response received (${String(modelResult.inputTokens)} input, ${String(modelResult.outputTokens)} output tokens, ${String(modelResult.latencyMs)}ms)`
+    );
+
+    // FORGE-55: Parse and validate model response
+    core.info('Parsing model response...');
+    const parsedOutput = parseModelResponse(modelResult.response, parsedFiles);
+
+    if (!parsedOutput.success) {
+      core.warning(
+        `Failed to parse model response: ${parsedOutput.parseErrors.join(', ')}`
+      );
+      // Set outputs with error state but don't fail
+      core.setOutput('review-summary', 'Failed to parse AI response');
+      core.setOutput('issues-found', '0');
+      core.setOutput(
+        'cost-usd',
+        calculateCost(
+          modelResult.inputTokens,
+          modelResult.outputTokens,
+          config.pricing
+        ).toFixed(6)
+      );
+      return;
+    }
+
+    core.info(
+      `Found ${String(parsedOutput.stats.validComments)} issues (${String(parsedOutput.stats.invalidComments)} invalid comments skipped)`
+    );
+
+    // Convert to GitHub CodeReview format
+    const review = toCodeReview(parsedOutput, builtPrompt.promptVersion);
+
+    // Post review to GitHub
+    if (review.comments.length > 0 || review.event !== 'APPROVE') {
+      core.info(`Posting review (${review.event})...`);
+      const result = await postReview(client, context, review, { dryRun });
+      core.info(
+        `Posted review with ${String(result.commentsPosted)} comments${dryRun ? ' (dry-run)' : ''}`
+      );
+    } else {
+      core.info('No issues found, skipping review post');
+    }
+
+    // Calculate cost
+    const cost = calculateCost(
+      modelResult.inputTokens,
+      modelResult.outputTokens,
+      config.pricing
+    );
+    core.info(`Estimated cost: $${cost.toFixed(6)}`);
+
+    // Set outputs
+    core.setOutput(
+      'review-summary',
+      parsedOutput.output?.summary ?? 'Review completed'
+    );
+    core.setOutput('issues-found', String(parsedOutput.stats.validComments));
+    core.setOutput('cost-usd', cost.toFixed(6));
+
+    // Fail if errors found and fail-on-errors is set
+    if (
+      failOnErrors &&
+      (parsedOutput.stats.bySeverity.critical > 0 ||
+        parsedOutput.stats.bySeverity.high > 0)
+    ) {
+      core.setFailed(
+        `Found ${String(parsedOutput.stats.bySeverity.critical)} critical and ${String(parsedOutput.stats.bySeverity.high)} high severity issues`
+      );
+      return;
+    }
 
     core.info('Quorum AI Code Review completed');
   } catch (error) {
