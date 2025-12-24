@@ -146,6 +146,7 @@ async function run(): Promise<void> {
     core.info(`Invoking model: ${model}...`);
     const modelResult = await invokeModel(bedrockClient, {
       modelId: model,
+      region: awsRegion,
       prompt: `${builtPrompt.systemPrompt}\n\n${builtPrompt.userPrompt}`,
       maxTokens: config.model.maxTokens,
       temperature: config.model.temperature,
