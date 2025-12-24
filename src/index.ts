@@ -1,8 +1,14 @@
 import * as core from '@actions/core';
+import * as github from '@actions/github';
 import { minimatch } from 'minimatch';
 
 import { calculateCost, createBedrockClient, invokeModel } from './bedrock.js';
-import { getConfig, type ReviewDepth } from './config.js';
+import {
+  extractPRConfig,
+  getConfig,
+  mergeConfigs,
+  type ReviewDepth,
+} from './config.js';
 import { parsePatch } from './diff-parser.js';
 import {
   createGitHubClient,
@@ -80,8 +86,18 @@ async function run(): Promise<void> {
     core.debug(`Fail on Errors: ${String(failOnErrors)}`);
     core.debug(`Dry Run: ${String(dryRun)}`);
 
-    // Load configuration
-    const config = await getConfig(configPath);
+    // Load configuration from file
+    const fileConfig = await getConfig(configPath);
+
+    // Extract and apply PR body config override
+    const prBody = github.context.payload.pull_request?.body ?? '';
+    const prConfig = extractPRConfig(prBody);
+    const config = prConfig ? mergeConfigs(fileConfig, prConfig) : fileConfig;
+
+    if (prConfig) {
+      core.info('Applied config override from PR description');
+      core.debug(`PR config override: ${JSON.stringify(prConfig)}`);
+    }
 
     // Apply input overrides to config
     const reviewDepth = normalizeReviewDepth(reviewDepthInput);
