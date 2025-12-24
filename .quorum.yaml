@@ -1,0 +1,32 @@
+version: 1
+
+review:
+  depth: standard
+  focus:
+    - security
+    - best-practices
+  instructions: |
+    This is a GitHub Action for AI-powered code review.
+    Focus on TypeScript best practices and action-specific concerns.
+    Pay attention to proper error handling and GitHub API usage.
+
+ignore:
+  - '**/node_modules/**'
+  - '**/dist/**'
+  - '**/coverage/**'
+  - '**/pnpm-lock.yaml'
+  - '**/*.md'
+
+paths:
+  - pattern: 'src/**/*.ts'
+    instructions: 'Ensure proper TypeScript types and error handling'
+  - pattern: 'tests/**/*.ts'
+    instructions: 'Verify test coverage and assertion quality'
+
+model:
+  maxTokens: 4096
+  temperature: 0.3
+
+pricing:
+  inputPer1M: 3.0
+  outputPer1M: 15.0
