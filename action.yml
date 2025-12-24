@@ -1,5 +1,5 @@
 name: 'Quorum - AI Code Review'
-description: 'AI-powered code review using AWS Bedrock with multi-model consensus'
+description: 'AI-powered code review using AWS Bedrock with configurable depth and security-focused analysis'
 author: 'Ezequiel Godoy'
 
 branding:
