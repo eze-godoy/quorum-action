@@ -270,7 +270,7 @@ export function toCodeReview(
     let body = `${formatSeverityBadge(comment.severity)} ${comment.message}`;
 
     // Add suggestion in GitHub format if present
-    if (comment.suggestion !== undefined) {
+    if (comment.suggestion !== undefined && comment.suggestion !== null) {
       body = formatSuggestionWithMessage(body, comment.suggestion);
     }
 

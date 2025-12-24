@@ -74,7 +74,7 @@ export const ReviewCommentSchema = z.object({
   severity: SeveritySchema.describe('Severity of the issue'),
   category: CategorySchema.describe('Category of the issue'),
   message: z.string().min(1).describe('Explanation of the issue'),
-  suggestion: z.string().optional().describe('Suggested code fix'),
+  suggestion: z.string().nullish().describe('Suggested code fix'),
 });
 export type ReviewComment = z.infer<typeof ReviewCommentSchema>;
 
