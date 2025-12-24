@@ -3,7 +3,14 @@ import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DEFAULT_CONFIG, getConfig, QuorumConfigSchema } from '../src/config';
+import {
+  DEFAULT_CONFIG,
+  extractPRConfig,
+  getConfig,
+  mergeConfigs,
+  QuorumConfigSchema,
+  type QuorumConfig,
+} from '../src/config';
 
 // Mock @actions/core
 vi.mock('@actions/core', () => ({
@@ -218,5 +225,190 @@ review:
     // Should use defaults: Claude 3.5 Sonnet pricing
     expect(config.pricing.inputPer1M).toBe(3.0);
     expect(config.pricing.outputPer1M).toBe(15.0);
+  });
+});
+
+describe('extractPRConfig', () => {
+  it('extracts valid config from PR body', () => {
+    const prBody = `
+## Summary
+Some changes here
+
+<!-- quorum-config: {"review": {"depth": "security"}} -->
+
+More description
+`;
+    const result = extractPRConfig(prBody);
+
+    expect(result).not.toBeNull();
+    expect(result?.review?.depth).toBe('security');
+  });
+
+  it('extracts config with multiple fields', () => {
+    const prBody = `<!-- quorum-config: {"review": {"depth": "deep", "focus": ["security"]}, "ignore": ["*.md"]} -->`;
+    const result = extractPRConfig(prBody);
+
+    expect(result).not.toBeNull();
+    expect(result?.review?.depth).toBe('deep');
+    expect(result?.review?.focus).toEqual(['security']);
+    expect(result?.ignore).toEqual(['*.md']);
+  });
+
+  it('returns null for empty body', () => {
+    expect(extractPRConfig('')).toBeNull();
+  });
+
+  it('returns null when no config comment present', () => {
+    const prBody = `
+## Summary
+Just a regular PR description with no config
+`;
+    expect(extractPRConfig(prBody)).toBeNull();
+  });
+
+  it('returns null for invalid JSON', () => {
+    const prBody = `<!-- quorum-config: {invalid json} -->`;
+    expect(extractPRConfig(prBody)).toBeNull();
+  });
+
+  it('returns null for invalid config schema', () => {
+    const prBody = `<!-- quorum-config: {"review": {"depth": "invalid-depth"}} -->`;
+    expect(extractPRConfig(prBody)).toBeNull();
+  });
+
+  it('handles multiline JSON config', () => {
+    const prBody = `
+<!-- quorum-config: {
+  "review": {
+    "depth": "quick",
+    "instructions": "Focus on performance"
+  }
+} -->
+`;
+    const result = extractPRConfig(prBody);
+
+    expect(result).not.toBeNull();
+    expect(result?.review?.depth).toBe('quick');
+    expect(result?.review?.instructions).toBe('Focus on performance');
+  });
+
+  it('handles config with extra whitespace', () => {
+    const prBody = `<!--   quorum-config:   {"review": {"depth": "deep"}}   -->`;
+    const result = extractPRConfig(prBody);
+
+    expect(result).not.toBeNull();
+    expect(result?.review?.depth).toBe('deep');
+  });
+});
+
+describe('mergeConfigs', () => {
+  const baseConfig: QuorumConfig = {
+    version: 1,
+    review: {
+      depth: 'standard',
+      focus: ['quality'],
+      instructions: 'Base instructions',
+    },
+    ignore: ['*.log'],
+    paths: [{ pattern: 'src/**', instructions: 'Check types' }],
+    model: {
+      id: 'base-model',
+      maxTokens: 4096,
+      temperature: 0.3,
+    },
+    pricing: {
+      inputPer1M: 3.0,
+      outputPer1M: 15.0,
+    },
+  };
+
+  it('overrides scalar values from PR config', () => {
+    const override = { review: { depth: 'security' as const } };
+    const result = mergeConfigs(baseConfig, override);
+
+    expect(result.review.depth).toBe('security');
+    // Other values should remain
+    expect(result.review.instructions).toBe('Base instructions');
+  });
+
+  it('concatenates focus arrays', () => {
+    const override = { review: { focus: ['security', 'performance'] } };
+    const result = mergeConfigs(baseConfig, override);
+
+    expect(result.review.focus).toEqual(['quality', 'security', 'performance']);
+  });
+
+  it('concatenates ignore arrays', () => {
+    const override = { ignore: ['*.md', '*.txt'] };
+    const result = mergeConfigs(baseConfig, override);
+
+    expect(result.ignore).toEqual(['*.log', '*.md', '*.txt']);
+  });
+
+  it('concatenates paths arrays', () => {
+    const override = {
+      paths: [{ pattern: 'tests/**', instructions: 'Check coverage' }],
+    };
+    const result = mergeConfigs(baseConfig, override);
+
+    expect(result.paths).toHaveLength(2);
+    expect(result.paths[0].pattern).toBe('src/**');
+    expect(result.paths[1].pattern).toBe('tests/**');
+  });
+
+  it('deep merges model settings', () => {
+    const override = { model: { temperature: 0.5 } };
+    const result = mergeConfigs(baseConfig, override);
+
+    expect(result.model.temperature).toBe(0.5);
+    expect(result.model.id).toBe('base-model');
+    expect(result.model.maxTokens).toBe(4096);
+  });
+
+  it('deep merges pricing settings', () => {
+    const override = { pricing: { outputPer1M: 20.0 } };
+    const result = mergeConfigs(baseConfig, override);
+
+    expect(result.pricing.outputPer1M).toBe(20.0);
+    expect(result.pricing.inputPer1M).toBe(3.0);
+  });
+
+  it('preserves base config when override is empty', () => {
+    const result = mergeConfigs(baseConfig, {});
+
+    expect(result).toEqual(baseConfig);
+  });
+
+  it('handles complete override', () => {
+    const override: Partial<QuorumConfig> = {
+      version: 1,
+      review: {
+        depth: 'deep',
+        focus: ['docs'],
+        instructions: 'New instructions',
+      },
+      ignore: ['*.spec.ts'],
+      paths: [{ pattern: 'lib/**' }],
+      model: {
+        id: 'new-model',
+        maxTokens: 8192,
+        temperature: 0.7,
+      },
+      pricing: {
+        inputPer1M: 1.0,
+        outputPer1M: 5.0,
+      },
+    };
+    const result = mergeConfigs(baseConfig, override);
+
+    expect(result.review.depth).toBe('deep');
+    expect(result.review.instructions).toBe('New instructions');
+    // Arrays should be concatenated
+    expect(result.review.focus).toEqual(['quality', 'docs']);
+    expect(result.ignore).toEqual(['*.log', '*.spec.ts']);
+    expect(result.paths).toHaveLength(2);
+    // Objects should be merged
+    expect(result.model.id).toBe('new-model');
+    expect(result.pricing.inputPer1M).toBe(1.0);
   });
 });

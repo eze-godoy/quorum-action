@@ -125,6 +125,12 @@ export const QuorumConfigSchema = z.object({
 export type QuorumConfig = z.infer<typeof QuorumConfigSchema>;
 
 /**
+ * Partial config schema for PR description overrides
+ * All fields are optional to allow partial overrides
+ */
+export const PartialQuorumConfigSchema = QuorumConfigSchema.partial();
+
+/**
  * Default configuration when no .quorum.yaml is present
  */
 export const DEFAULT_CONFIG: QuorumConfig = {
@@ -200,4 +206,106 @@ export async function getConfig(configPath: string): Promise<QuorumConfig> {
     core.warning(`Error reading configuration: ${String(error)}`);
     return DEFAULT_CONFIG;
   }
+}
+
+/**
+ * Regex pattern to extract quorum-config from PR description
+ * Matches: <!-- quorum-config: {...} -->
+ */
+const PR_CONFIG_REGEX = /<!--\s*quorum-config:\s*(\{[\s\S]*?\})\s*-->/;
+
+/**
+ * Extracts and parses quorum configuration from PR description
+ *
+ * @param prBody - The PR description body text
+ * @returns Parsed partial config or null if not found/invalid
+ *
+ * @example
+ * ```markdown
+ * ## Summary
+ * Some PR description
+ *
+ * <!-- quorum-config: {"review": {"depth": "security"}} -->
+ * ```
+ */
+export function extractPRConfig(prBody: string): Partial<QuorumConfig> | null {
+  if (prBody === '') {
+    return null;
+  }
+
+  const match = PR_CONFIG_REGEX.exec(prBody);
+  if (match?.[1] === undefined) {
+    return null;
+  }
+
+  const jsonContent = match[1];
+
+  try {
+    const parsed: unknown = JSON.parse(jsonContent);
+    const result = PartialQuorumConfigSchema.safeParse(parsed);
+
+    if (!result.success) {
+      core.warning(
+        `Invalid quorum-config in PR description: ${result.error.message}`
+      );
+      return null;
+    }
+
+    // Cast to Partial<QuorumConfig> - Zod's .partial() uses `T | undefined` for fields
+    // but Partial<T> uses optional properties. The data is validated, so this is safe.
+    return result.data as Partial<QuorumConfig>;
+  } catch (error) {
+    core.warning(
+      `Failed to parse quorum-config JSON in PR description: ${String(error)}`
+    );
+    return null;
+  }
+}
+
+/**
+ * Merges PR config override with base config
+ * Priority: PR config > file config
+ *
+ * Arrays are concatenated (PR config adds to existing)
+ * Objects are deep merged (PR config overrides specific fields)
+ *
+ * @param base - Base configuration (from file + defaults)
+ * @param override - Partial config from PR description
+ * @returns Merged configuration
+ */
+export function mergeConfigs(
+  base: QuorumConfig,
+  override: Partial<QuorumConfig>
+): QuorumConfig {
+  return {
+    ...base,
+    version: override.version ?? base.version,
+    review: {
+      ...base.review,
+      ...override.review,
+      // Concat focus arrays if override has focus
+      focus:
+        override.review?.focus !== undefined
+          ? [...base.review.focus, ...override.review.focus]
+          : base.review.focus,
+    },
+    // Concat ignore arrays if override has ignore
+    ignore:
+      override.ignore !== undefined
+        ? [...base.ignore, ...override.ignore]
+        : base.ignore,
+    // Concat paths arrays if override has paths
+    paths:
+      override.paths !== undefined
+        ? [...base.paths, ...override.paths]
+        : base.paths,
+    model: {
+      ...base.model,
+      ...override.model,
+    },
+    pricing: {
+      ...base.pricing,
+      ...override.pricing,
+    },
+  };
 }
