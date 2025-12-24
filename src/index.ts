@@ -158,11 +158,17 @@ async function run(): Promise<void> {
 
     // FORGE-55: Parse and validate model response
     core.info('Parsing model response...');
+    core.debug(
+      `Raw model response preview (first 500 chars): ${modelResult.response.slice(0, 500)}`
+    );
     const parsedOutput = parseModelResponse(modelResult.response, parsedFiles);
 
     if (!parsedOutput.success) {
       core.warning(
         `Failed to parse model response: ${parsedOutput.parseErrors.join(', ')}`
+      );
+      core.warning(
+        `Response starts with: "${modelResult.response.slice(0, 300).replace(/\n/g, '\\n')}..."`
       );
       // Set outputs with error state but don't fail
       core.setOutput('review-summary', 'Failed to parse AI response');
