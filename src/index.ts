@@ -93,7 +93,7 @@ async function run(): Promise<void> {
     const model =
       (modelInput !== '' ? modelInput : undefined) ??
       config.model.id ??
-      'anthropic.claude-3-5-sonnet-20241022-v2:0';
+      'anthropic.claude-sonnet-4-20250514-v1:0';
 
     core.debug(`Model: ${model}`);
     core.debug(`Loaded config: ${JSON.stringify(config)}`);

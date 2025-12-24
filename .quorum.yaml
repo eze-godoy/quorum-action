@@ -24,6 +24,7 @@ paths:
     instructions: 'Verify test coverage and assertion quality'
 
 model:
+  id: anthropic.claude-sonnet-4-20250514-v1:0
   maxTokens: 4096
   temperature: 0.3
 
