@@ -289,7 +289,8 @@ You MUST respond with valid JSON matching this exact structure:
 - Line numbers MUST reference lines visible in the diff (RIGHT side for additions/context)
 - Only comment on lines within the provided hunks
 - Use severity appropriately: critical for security/data loss, high for bugs, medium for improvements, low for style
-- Provide GitHub suggestion format when offering code fixes: \`\`\`suggestion\\n<code>\\n\`\`\`
+- For the "suggestion" field, provide ONLY the replacement code as a plain string (no markdown, no backticks, no code blocks). We will format it for GitHub.
+- All strings in JSON must be properly escaped (newlines as \\n, quotes as \\", etc.)
 - If no issues are found, return an empty comments array with overallSeverity "none"`,
 
   userPromptTemplate: `{{DEPTH_INSTRUCTIONS}}
