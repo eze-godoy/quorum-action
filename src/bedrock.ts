@@ -28,6 +28,7 @@ export interface BedrockClientOptions {
  */
 export interface InvokeModelOptions {
   modelId: string;
+  region: string;
   prompt: string;
   maxTokens?: number;
   temperature?: number;
@@ -114,6 +115,16 @@ export class AccessDeniedError extends BedrockError {
 // ============================================================================
 
 /**
+ * Maps AWS region prefixes to inference profile prefixes
+ * Required for newer models (Claude 4.x+) that only support INFERENCE_PROFILE
+ */
+const REGION_PREFIX_MAP: Record<string, string> = {
+  us: 'us',
+  eu: 'eu',
+  ap: 'apac',
+};
+
+/**
  * Retryable AWS error names
  */
 const RETRYABLE_ERROR_NAMES = [
@@ -143,6 +154,42 @@ export function createBedrockClient(
     region: options.region,
     // Credentials are auto-detected from environment variables
   });
+}
+
+/**
+ * Converts a model ID to an inference profile ID by prepending region prefix.
+ * Required for newer models (Claude 4.x+) that only support INFERENCE_PROFILE.
+ *
+ * AWS cross-region inference profiles use format: `<region-prefix>.<model-id>`
+ * - us-* regions → us.
+ * - eu-* regions → eu.
+ * - ap-* regions → apac.
+ *
+ * @param modelId - The base model ID (e.g., 'anthropic.claude-sonnet-4-20250514-v1:0')
+ * @param region - AWS region (e.g., 'eu-central-1')
+ * @returns Inference profile ID (e.g., 'eu.anthropic.claude-sonnet-4-20250514-v1:0')
+ */
+export function toInferenceProfileId(modelId: string, region: string): string {
+  // Skip if already has a region prefix
+  if (/^(us|eu|apac)\./.test(modelId)) {
+    return modelId;
+  }
+
+  // Extract region prefix from region string (e.g., 'eu-central-1' → 'eu')
+  const regionPrefix = region.split('-')[0];
+
+  if (regionPrefix === undefined) {
+    return modelId;
+  }
+
+  const inferencePrefix = REGION_PREFIX_MAP[regionPrefix];
+
+  if (inferencePrefix === undefined) {
+    // Unknown region, return as-is and let Bedrock handle it
+    return modelId;
+  }
+
+  return `${inferencePrefix}.${modelId}`;
 }
 
 /**
@@ -197,9 +244,15 @@ export async function invokeModel(
 ): Promise<ModelInvocationResult> {
   const startTime = Date.now();
 
+  // Convert model ID to inference profile ID for newer models (Claude 4.x+)
+  const inferenceProfileId = toInferenceProfileId(
+    options.modelId,
+    options.region
+  );
+
   // Use Converse API for vendor-agnostic model invocation
   const command = new ConverseCommand({
-    modelId: options.modelId,
+    modelId: inferenceProfileId,
     messages: [
       {
         role: 'user',

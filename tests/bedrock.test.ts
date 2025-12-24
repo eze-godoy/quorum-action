@@ -9,6 +9,7 @@ import {
   isBedrockRetryableError,
   ModelTimeoutError,
   ThrottlingError,
+  toInferenceProfileId,
   ValidationError,
   type BedrockRuntimeClient,
   type ModelPricing,
@@ -95,6 +96,124 @@ describe('createBedrockClient', () => {
     expect(
       (client as unknown as { _config: { region: string } })._config.region
     ).toBe('us-west-2');
+  });
+});
+
+describe('toInferenceProfileId', () => {
+  describe('US regions', () => {
+    it('adds us. prefix for us-east-1', () => {
+      const result = toInferenceProfileId(
+        'anthropic.claude-sonnet-4-20250514-v1:0',
+        'us-east-1'
+      );
+      expect(result).toBe('us.anthropic.claude-sonnet-4-20250514-v1:0');
+    });
+
+    it('adds us. prefix for us-west-2', () => {
+      const result = toInferenceProfileId(
+        'anthropic.claude-sonnet-4-20250514-v1:0',
+        'us-west-2'
+      );
+      expect(result).toBe('us.anthropic.claude-sonnet-4-20250514-v1:0');
+    });
+  });
+
+  describe('EU regions', () => {
+    it('adds eu. prefix for eu-central-1', () => {
+      const result = toInferenceProfileId(
+        'anthropic.claude-sonnet-4-20250514-v1:0',
+        'eu-central-1'
+      );
+      expect(result).toBe('eu.anthropic.claude-sonnet-4-20250514-v1:0');
+    });
+
+    it('adds eu. prefix for eu-west-1', () => {
+      const result = toInferenceProfileId(
+        'anthropic.claude-sonnet-4-20250514-v1:0',
+        'eu-west-1'
+      );
+      expect(result).toBe('eu.anthropic.claude-sonnet-4-20250514-v1:0');
+    });
+  });
+
+  describe('APAC regions', () => {
+    it('adds apac. prefix for ap-northeast-1', () => {
+      const result = toInferenceProfileId(
+        'anthropic.claude-sonnet-4-20250514-v1:0',
+        'ap-northeast-1'
+      );
+      expect(result).toBe('apac.anthropic.claude-sonnet-4-20250514-v1:0');
+    });
+
+    it('adds apac. prefix for ap-southeast-1', () => {
+      const result = toInferenceProfileId(
+        'anthropic.claude-sonnet-4-20250514-v1:0',
+        'ap-southeast-1'
+      );
+      expect(result).toBe('apac.anthropic.claude-sonnet-4-20250514-v1:0');
+    });
+  });
+
+  describe('already prefixed model IDs', () => {
+    it('returns unchanged for us. prefix', () => {
+      const result = toInferenceProfileId(
+        'us.anthropic.claude-sonnet-4-20250514-v1:0',
+        'eu-central-1'
+      );
+      expect(result).toBe('us.anthropic.claude-sonnet-4-20250514-v1:0');
+    });
+
+    it('returns unchanged for eu. prefix', () => {
+      const result = toInferenceProfileId(
+        'eu.anthropic.claude-sonnet-4-20250514-v1:0',
+        'us-east-1'
+      );
+      expect(result).toBe('eu.anthropic.claude-sonnet-4-20250514-v1:0');
+    });
+
+    it('returns unchanged for apac. prefix', () => {
+      const result = toInferenceProfileId(
+        'apac.anthropic.claude-sonnet-4-20250514-v1:0',
+        'us-east-1'
+      );
+      expect(result).toBe('apac.anthropic.claude-sonnet-4-20250514-v1:0');
+    });
+  });
+
+  describe('unknown regions', () => {
+    it('returns unchanged for unknown region prefix', () => {
+      const result = toInferenceProfileId(
+        'anthropic.claude-sonnet-4-20250514-v1:0',
+        'cn-north-1'
+      );
+      expect(result).toBe('anthropic.claude-sonnet-4-20250514-v1:0');
+    });
+
+    it('returns unchanged for empty region', () => {
+      const result = toInferenceProfileId(
+        'anthropic.claude-sonnet-4-20250514-v1:0',
+        ''
+      );
+      expect(result).toBe('anthropic.claude-sonnet-4-20250514-v1:0');
+    });
+  });
+
+  describe('various model IDs', () => {
+    it('works with Claude 3 Haiku', () => {
+      const result = toInferenceProfileId(
+        'anthropic.claude-3-haiku-20240307-v1:0',
+        'eu-central-1'
+      );
+      expect(result).toBe('eu.anthropic.claude-3-haiku-20240307-v1:0');
+    });
+
+    it('works with Claude Opus 4.5', () => {
+      const result = toInferenceProfileId(
+        'anthropic.claude-opus-4-5-20251101-v1:0',
+        'us-east-1'
+      );
+      expect(result).toBe('us.anthropic.claude-opus-4-5-20251101-v1:0');
+    });
   });
 });
 
@@ -188,6 +307,7 @@ describe('invokeModel', () => {
 
     const result = await invokeModel(mockClient, {
       modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+      region: 'us-east-1',
       prompt: 'Say hello',
     });
 
@@ -213,6 +333,7 @@ describe('invokeModel', () => {
 
     await invokeModel(mockClient, {
       modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+      region: 'us-east-1',
       prompt: 'Test prompt',
     });
 
@@ -236,6 +357,7 @@ describe('invokeModel', () => {
 
     await invokeModel(mockClient, {
       modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+      region: 'eu-central-1',
       prompt: 'Test prompt',
       maxTokens: 2048,
       temperature: 0.7,
@@ -261,6 +383,7 @@ describe('invokeModel', () => {
 
     const result = await invokeModel(mockClient, {
       modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+      region: 'us-east-1',
       prompt: 'Test',
     });
 
@@ -284,6 +407,7 @@ describe('invokeModel', () => {
 
     const result = await invokeModel(mockClient, {
       modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+      region: 'us-east-1',
       prompt: 'Test',
     });
 
@@ -306,6 +430,7 @@ describe('invokeModel', () => {
 
     const result = await invokeModel(mockClient, {
       modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+      region: 'us-east-1',
       prompt: 'Test',
     });
 
@@ -329,6 +454,7 @@ describe('invokeModel', () => {
 
     const result = await invokeModel(mockClient, {
       modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+      region: 'us-east-1',
       prompt: 'Test',
     });
 
