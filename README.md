@@ -61,6 +61,62 @@ jobs:
         uses: eze-godoy/quorum-action@v1
 ```
 
+#### On-Demand Reviews (Recommended)
+
+To reduce noise, configure the action to run only on PR open and on-demand via `/review` comment:
+
+```yaml
+name: Quorum Code Review
+
+on:
+  pull_request:
+    types: [opened]  # Only on PR open
+  issue_comment:
+    types: [created]  # For /review command
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       contains(github.event.comment.body, '/review'))
+    steps:
+      - name: Get PR ref (for comment trigger)
+        if: github.event_name == 'issue_comment'
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            core.setOutput('ref', pr.data.head.ref);
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'issue_comment' && steps.pr.outputs.ref || github.head_ref }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - uses: eze-godoy/quorum-action@v1
+```
+
+This triggers a review when:
+- A PR is opened (automatic)
+- Someone comments `/review` on the PR (on-demand)
+
 ### 3. Configure (Optional)
 
 Create `.quorum.yaml` in your repository root:
