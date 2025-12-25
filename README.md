@@ -97,6 +97,14 @@ model:
 pricing:
   inputPer1M: 3.0
   outputPer1M: 15.0
+
+output:
+  minSeverity: low       # low | medium | high | critical
+  severityEmoji:         # Optional custom emojis
+    critical: '🔴'
+    high: '🟠'
+    medium: '🟡'
+    low: '🔵'
 ```
 
 ## Inputs
@@ -147,6 +155,8 @@ Major refactor of authentication system
 - `ignore` - Add ignore patterns (concatenated with existing)
 - `paths` - Add path rules (concatenated with existing)
 - `model.*` - Override model settings
+- `output.minSeverity` - Filter comments by minimum severity
+- `output.severityEmoji` - Custom severity emoji badges
 
 ## Configuration Reference
 
@@ -207,6 +217,32 @@ pricing:
   inputPer1M: 3.0    # Cost per 1M input tokens (USD)
   outputPer1M: 15.0  # Cost per 1M output tokens (USD)
 ```
+
+### Output Configuration
+
+Control how review comments are formatted and filtered:
+
+```yaml
+output:
+  minSeverity: medium    # Only post comments at or above this level
+  severityEmoji:         # Optional: customize severity badges
+    critical: '🔴'
+    high: '🟠'
+    medium: '🟡'
+    low: '🔵'
+```
+
+**Severity Hierarchy:** `critical` > `high` > `medium` > `low`
+
+Setting `minSeverity: high` will only post `critical` and `high` severity comments, filtering out `medium` and `low`.
+
+Default emoji badges:
+| Severity | Badge |
+|----------|-------|
+| Critical | 🔴 **Critical** |
+| High | 🟠 **High** |
+| Medium | 🟡 **Medium** |
+| Low | 🔵 **Low** |
 
 ## Architecture
 

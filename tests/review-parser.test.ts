@@ -5,6 +5,7 @@ import {
   buildReviewSummary,
   determineReviewEvent,
   extractJson,
+  meetsMinSeverity,
   parseModelResponse,
   toCodeReview,
   validateComment,
@@ -547,7 +548,7 @@ describe('toCodeReview', () => {
 
     const review = toCodeReview(parsed, '1.0.0');
 
-    expect(review.comments[0].body).toContain('[HIGH]');
+    expect(review.comments[0].body).toContain('🟠 **High**');
     expect(review.comments[0].body).toContain('Potential SQL injection');
   });
 
@@ -680,5 +681,136 @@ describe('toCodeReview', () => {
     for (const comment of review.comments) {
       expect(comment.side).toBe('RIGHT');
     }
+  });
+
+  it('filters comments by minSeverity', () => {
+    const files = [createMockFile()];
+    const output = {
+      ...createValidModelOutput(),
+      comments: [
+        {
+          path: 'src/index.ts',
+          line: 1,
+          severity: 'critical',
+          category: 'security',
+          message: 'Critical issue',
+        },
+        {
+          path: 'src/index.ts',
+          line: 2,
+          severity: 'high',
+          category: 'security',
+          message: 'High issue',
+        },
+        {
+          path: 'src/index.ts',
+          line: 3,
+          severity: 'medium',
+          category: 'maintainability',
+          message: 'Medium issue',
+        },
+        {
+          path: 'src/index.ts',
+          line: 2, // Use valid line from mock file
+          severity: 'low',
+          category: 'style',
+          message: 'Low issue',
+        },
+      ],
+    };
+    const response = JSON.stringify(output);
+    const parsed = parseModelResponse(response, files);
+
+    // minSeverity: high should only include critical and high
+    const review = toCodeReview(parsed, '1.0.0', { minSeverity: 'high' });
+
+    expect(review.comments).toHaveLength(2);
+    expect(review.comments[0].body).toContain('Critical issue');
+    expect(review.comments[1].body).toContain('High issue');
+  });
+
+  it('uses custom severity emojis when provided', () => {
+    const files = [createMockFile()];
+    const response = JSON.stringify(createValidModelOutput());
+    const parsed = parseModelResponse(response, files);
+
+    const review = toCodeReview(parsed, '1.0.0', {
+      minSeverity: 'low',
+      severityEmoji: { high: '⚠️' },
+    });
+
+    expect(review.comments[0].body).toContain('⚠️ **High**');
+  });
+
+  it('falls back to default emoji when custom not provided for severity', () => {
+    const files = [createMockFile()];
+    const output = {
+      ...createValidModelOutput(),
+      comments: [
+        {
+          path: 'src/index.ts',
+          line: 2,
+          severity: 'critical',
+          category: 'security',
+          message: 'Critical issue',
+        },
+      ],
+    };
+    const response = JSON.stringify(output);
+    const parsed = parseModelResponse(response, files);
+
+    // Only override high, not critical
+    const review = toCodeReview(parsed, '1.0.0', {
+      minSeverity: 'low',
+      severityEmoji: { high: '⚠️' },
+    });
+
+    // Should use default emoji for critical
+    expect(review.comments[0].body).toContain('🔴 **Critical**');
+  });
+});
+
+describe('meetsMinSeverity', () => {
+  it('returns true when severity equals minSeverity', () => {
+    expect(meetsMinSeverity('high', 'high')).toBe(true);
+    expect(meetsMinSeverity('low', 'low')).toBe(true);
+  });
+
+  it('returns true when severity is higher than minSeverity', () => {
+    expect(meetsMinSeverity('critical', 'low')).toBe(true);
+    expect(meetsMinSeverity('high', 'medium')).toBe(true);
+    expect(meetsMinSeverity('medium', 'low')).toBe(true);
+  });
+
+  it('returns false when severity is lower than minSeverity', () => {
+    expect(meetsMinSeverity('low', 'medium')).toBe(false);
+    expect(meetsMinSeverity('medium', 'high')).toBe(false);
+    expect(meetsMinSeverity('high', 'critical')).toBe(false);
+  });
+
+  it('handles all severity combinations correctly', () => {
+    // critical (4) meets all
+    expect(meetsMinSeverity('critical', 'critical')).toBe(true);
+    expect(meetsMinSeverity('critical', 'high')).toBe(true);
+    expect(meetsMinSeverity('critical', 'medium')).toBe(true);
+    expect(meetsMinSeverity('critical', 'low')).toBe(true);
+
+    // high (3) meets high, medium, low
+    expect(meetsMinSeverity('high', 'critical')).toBe(false);
+    expect(meetsMinSeverity('high', 'high')).toBe(true);
+    expect(meetsMinSeverity('high', 'medium')).toBe(true);
+    expect(meetsMinSeverity('high', 'low')).toBe(true);
+
+    // medium (2) meets medium, low
+    expect(meetsMinSeverity('medium', 'critical')).toBe(false);
+    expect(meetsMinSeverity('medium', 'high')).toBe(false);
+    expect(meetsMinSeverity('medium', 'medium')).toBe(true);
+    expect(meetsMinSeverity('medium', 'low')).toBe(true);
+
+    // low (1) only meets low
+    expect(meetsMinSeverity('low', 'critical')).toBe(false);
+    expect(meetsMinSeverity('low', 'high')).toBe(false);
+    expect(meetsMinSeverity('low', 'medium')).toBe(false);
+    expect(meetsMinSeverity('low', 'low')).toBe(true);
   });
 });

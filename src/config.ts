@@ -57,6 +57,43 @@ export const PricingSchema = z.object({
 export type Pricing = z.infer<typeof PricingSchema>;
 
 /**
+ * Severity levels for filtering comments
+ */
+export const SeverityLevelSchema = z.enum([
+  'critical',
+  'high',
+  'medium',
+  'low',
+]);
+export type SeverityLevel = z.infer<typeof SeverityLevelSchema>;
+
+/**
+ * Default severity emoji mapping
+ */
+export const DEFAULT_SEVERITY_EMOJI: Record<SeverityLevel, string> = {
+  critical: '🔴',
+  high: '🟠',
+  medium: '🟡',
+  low: '🔵',
+};
+
+/**
+ * Output configuration for review comments
+ */
+export const OutputSchema = z.object({
+  minSeverity: SeverityLevelSchema.optional()
+    .default('low')
+    .describe(
+      'Minimum severity level to post comments (critical > high > medium > low)'
+    ),
+  severityEmoji: z
+    .record(SeverityLevelSchema, z.string())
+    .optional()
+    .describe('Custom emoji mapping for severity levels'),
+});
+export type Output = z.infer<typeof OutputSchema>;
+
+/**
  * Main Quorum configuration schema
  */
 export const QuorumConfigSchema = z.object({
@@ -120,6 +157,10 @@ export const QuorumConfigSchema = z.object({
   pricing: PricingSchema.optional()
     .default({})
     .describe('Model pricing configuration for cost tracking'),
+
+  output: OutputSchema.optional()
+    .default({})
+    .describe('Output configuration for review comments'),
 });
 
 export type QuorumConfig = z.infer<typeof QuorumConfigSchema>;
@@ -162,6 +203,10 @@ export const DEFAULT_CONFIG: QuorumConfig = {
     inputPer1M: 3.0, // Claude 3.5 Sonnet default
     outputPer1M: 15.0,
   },
+  output: {
+    minSeverity: 'low',
+    severityEmoji: undefined,
+  },
 };
 
 /**
@@ -196,6 +241,7 @@ export async function getConfig(configPath: string): Promise<QuorumConfig> {
       paths: result.data.paths,
       model: { ...DEFAULT_CONFIG.model, ...result.data.model },
       pricing: { ...DEFAULT_CONFIG.pricing, ...result.data.pricing },
+      output: { ...DEFAULT_CONFIG.output, ...result.data.output },
     };
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
@@ -306,6 +352,10 @@ export function mergeConfigs(
     pricing: {
       ...base.pricing,
       ...override.pricing,
+    },
+    output: {
+      ...base.output,
+      ...override.output,
     },
   };
 }

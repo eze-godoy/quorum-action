@@ -5,6 +5,11 @@
  * and converts to GitHub CodeReview format.
  */
 
+import {
+  DEFAULT_SEVERITY_EMOJI,
+  type Output,
+  type SeverityLevel,
+} from './config.js';
 import { isLineInDiff } from './diff-parser.js';
 import {
   formatSuggestionWithMessage,
@@ -21,6 +26,30 @@ import {
   type ReviewComment,
   type ValidatedComment,
 } from './review-schema.js';
+
+// ============================================================================
+// Severity Utilities
+// ============================================================================
+
+/**
+ * Severity priority for filtering (higher = more severe)
+ */
+const SEVERITY_PRIORITY: Record<SeverityLevel, number> = {
+  critical: 4,
+  high: 3,
+  medium: 2,
+  low: 1,
+};
+
+/**
+ * Checks if a severity meets the minimum threshold
+ */
+export function meetsMinSeverity(
+  severity: SeverityLevel,
+  minSeverity: SeverityLevel
+): boolean {
+  return SEVERITY_PRIORITY[severity] >= SEVERITY_PRIORITY[minSeverity];
+}
 
 // ============================================================================
 // JSON Extraction
@@ -240,10 +269,15 @@ export function buildReviewSummary(
 }
 
 /**
- * Formats a comment severity for display
+ * Formats a comment severity for display with emoji badge
  */
-function formatSeverityBadge(severity: ReviewComment['severity']): string {
-  return `**[${severity.toUpperCase()}]**`;
+function formatSeverityBadge(
+  severity: ReviewComment['severity'],
+  customEmoji?: Partial<Record<SeverityLevel, string>>
+): string {
+  const emoji = customEmoji?.[severity] ?? DEFAULT_SEVERITY_EMOJI[severity];
+  const label = severity.charAt(0).toUpperCase() + severity.slice(1);
+  return `${emoji} **${label}**`;
 }
 
 /**
@@ -251,10 +285,16 @@ function formatSeverityBadge(severity: ReviewComment['severity']): string {
  */
 export function toCodeReview(
   parsedOutput: ParsedModelOutput,
-  promptVersion: string
+  promptVersion: string,
+  outputConfig?: Output
 ): CodeReview {
-  // Filter to only valid comments
-  const validComments = parsedOutput.validatedComments.filter((c) => c.isValid);
+  const minSeverity = outputConfig?.minSeverity ?? 'low';
+  const customEmoji = outputConfig?.severityEmoji;
+
+  // Filter to only valid comments that meet minimum severity
+  const validComments = parsedOutput.validatedComments.filter(
+    (c) => c.isValid && meetsMinSeverity(c.severity, minSeverity)
+  );
 
   // Determine review event based on severity
   const event = determineReviewEvent(
@@ -267,7 +307,7 @@ export function toCodeReview(
 
   // Convert to GitHub comment format
   const comments: MultiLineReviewComment[] = validComments.map((comment) => {
-    let body = `${formatSeverityBadge(comment.severity)} ${comment.message}`;
+    let body = `${formatSeverityBadge(comment.severity, customEmoji)} ${comment.message}`;
 
     // Add suggestion in GitHub format if present
     if (comment.suggestion !== undefined && comment.suggestion !== null) {
