@@ -70,8 +70,15 @@ async function run(): Promise<void> {
     core.info('Starting Quorum AI Code Review');
 
     // Get action inputs
-    const awsRoleArn = core.getInput('aws-role-arn', { required: true });
-    const awsRegion = core.getInput('aws-region') || 'us-east-1';
+    // AWS region: input > AWS_REGION env var > AWS_DEFAULT_REGION env var > us-east-1
+    const awsRegionInput = core.getInput('aws-region');
+    const awsRegion =
+      (awsRegionInput !== '' ? awsRegionInput : undefined) ??
+      (process.env.AWS_REGION !== '' ? process.env.AWS_REGION : undefined) ??
+      (process.env.AWS_DEFAULT_REGION !== ''
+        ? process.env.AWS_DEFAULT_REGION
+        : undefined) ??
+      'us-east-1';
     const modelInput = core.getInput('model');
     const configPath = core.getInput('config-path') || '.quorum.yaml';
     const reviewDepthInput = core.getInput('review-depth') || 'standard';
@@ -79,7 +86,6 @@ async function run(): Promise<void> {
     const dryRun = core.getInput('dry-run') === 'true';
     const githubToken = core.getInput('github-token', { required: true });
 
-    core.debug(`AWS Role ARN: ${awsRoleArn}`);
     core.debug(`AWS Region: ${awsRegion}`);
     core.debug(`Config Path: ${configPath}`);
     core.debug(`Review Depth: ${reviewDepthInput}`);
@@ -154,10 +160,7 @@ async function run(): Promise<void> {
 
     // FORGE-54: Create Bedrock client and invoke model
     core.info('Initializing AWS Bedrock client...');
-    const bedrockClient = createBedrockClient({
-      region: awsRegion,
-      roleArn: awsRoleArn,
-    });
+    const bedrockClient = createBedrockClient({ region: awsRegion });
 
     core.info(`Invoking model: ${model}...`);
     const modelResult = await invokeModel(bedrockClient, {

@@ -39,11 +39,8 @@ jobs:
       - name: Run Quorum Code Review (dry-run)
         uses: ./
         with:
-          aws-role-arn: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: eu-central-1
           review-depth: standard
           dry-run: 'true'
-          github-token: ${{ secrets.GA_GITHUB_TOKEN }}
 
   build:
     name: Build
