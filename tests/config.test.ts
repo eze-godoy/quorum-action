@@ -320,6 +320,10 @@ describe('mergeConfigs', () => {
       inputPer1M: 3.0,
       outputPer1M: 15.0,
     },
+    output: {
+      minSeverity: 'low',
+      severityEmoji: undefined,
+    },
   };
 
   it('overrides scalar values from PR config', () => {
@@ -410,5 +414,57 @@ describe('mergeConfigs', () => {
     // Objects should be merged
     expect(result.model.id).toBe('new-model');
     expect(result.pricing.inputPer1M).toBe(1.0);
+  });
+
+  it('merges output config', () => {
+    const override = { output: { minSeverity: 'high' as const } };
+    const result = mergeConfigs(baseConfig, override);
+
+    expect(result.output.minSeverity).toBe('high');
+    expect(result.output.severityEmoji).toBeUndefined();
+  });
+
+  it('preserves base output config when no override', () => {
+    const result = mergeConfigs(baseConfig, {});
+
+    expect(result.output.minSeverity).toBe('low');
+  });
+});
+
+describe('OutputSchema', () => {
+  it('has correct default minSeverity', () => {
+    expect(DEFAULT_CONFIG.output.minSeverity).toBe('low');
+  });
+
+  it('has undefined severityEmoji by default', () => {
+    expect(DEFAULT_CONFIG.output.severityEmoji).toBeUndefined();
+  });
+
+  it('validates minSeverity values', () => {
+    const validValues = ['critical', 'high', 'medium', 'low'] as const;
+    for (const value of validValues) {
+      const config = { output: { minSeverity: value } };
+      const result = QuorumConfigSchema.safeParse(config);
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it('rejects invalid minSeverity values', () => {
+    const config = { output: { minSeverity: 'invalid' } };
+    const result = QuorumConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts custom severityEmoji', () => {
+    const config = {
+      output: {
+        severityEmoji: {
+          critical: '❌',
+          high: '⚠️',
+        },
+      },
+    };
+    const result = QuorumConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
   });
 });

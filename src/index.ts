@@ -208,7 +208,11 @@ async function run(): Promise<void> {
     );
 
     // Convert to GitHub CodeReview format
-    const review = toCodeReview(parsedOutput, builtPrompt.promptVersion);
+    const review = toCodeReview(
+      parsedOutput,
+      builtPrompt.promptVersion,
+      config.output
+    );
 
     // Post review to GitHub
     if (review.comments.length > 0 || review.event !== 'APPROVE') {
