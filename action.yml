@@ -7,14 +7,9 @@ branding:
   color: 'purple'
 
 inputs:
-  aws-role-arn:
-    description: 'AWS IAM Role ARN for OIDC authentication to Bedrock'
-    required: true
-
   aws-region:
-    description: 'AWS region where Bedrock is available'
+    description: 'AWS region for Bedrock (auto-detected from AWS_REGION env var if not specified)'
     required: false
-    default: 'us-east-1'
 
   model:
     description: 'Bedrock model ID to use for code review'

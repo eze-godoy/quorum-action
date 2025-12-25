@@ -20,7 +20,6 @@ import { withRetry } from './retry.js';
  */
 export interface BedrockClientOptions {
   region: string;
-  roleArn: string;
 }
 
 /**
@@ -144,7 +143,7 @@ const RETRYABLE_ERROR_NAMES = [
  * AWS SDK reads AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN
  * set by aws-actions/configure-aws-credentials GitHub Action.
  *
- * @param options - Client options (region is required, roleArn is informational)
+ * @param options - Client options (region is required)
  * @returns Configured BedrockRuntimeClient
  */
 export function createBedrockClient(
