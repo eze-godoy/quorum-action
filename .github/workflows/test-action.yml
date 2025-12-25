@@ -41,7 +41,6 @@ jobs:
         with:
           review-depth: standard
           dry-run: 'true'
-          github-token: ${{ secrets.GA_GITHUB_TOKEN }}
 
   build:
     name: Build

@@ -106,7 +106,7 @@ pricing:
 | `aws-region` | AWS region for Bedrock | No | Auto-detected from `AWS_REGION` env var, or `us-east-1` |
 | `model` | Bedrock model ID | No | `anthropic.claude-sonnet-4-20250514-v1:0` |
 | `config-path` | Path to `.quorum.yaml` | No | `.quorum.yaml` |
-| `github-token` | GitHub token for API access | No | `${{ github.token }}` |
+| `github-token` | GitHub token (only needed for PAT with elevated permissions) | No | `${{ github.token }}` |
 | `review-depth` | Review depth profile | No | `standard` |
 | `fail-on-errors` | Fail if critical/high issues found | No | `false` |
 | `dry-run` | Run without posting comments | No | `false` |
